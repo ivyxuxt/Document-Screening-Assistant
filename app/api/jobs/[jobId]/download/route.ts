@@ -1,6 +1,3 @@
-import { createReadStream } from 'fs';
-import { Readable } from 'stream';
-
 import { NextResponse } from 'next/server';
 
 import {
@@ -9,8 +6,7 @@ import {
 } from '@shared/constants';
 import { getJobAccessTokenFromRequest, getRequestIp, isRateLimited, isUuid } from '@shared/security';
 
-import { getJobStatus, getRedisConnection, hasJobAccess } from '@queue/queue';
-import { fileExists, isPathWithinJobRoot } from '@storage/localTempStorage';
+import { getJobFile, getJobStatus, getRedisConnection, hasJobAccess } from '@queue/queue';
 
 export const runtime = 'nodejs';
 
@@ -51,25 +47,19 @@ export async function GET(
     return NextResponse.json({ error: { message: 'Job not found.' } }, { status: 404 });
   }
 
-  if (jobStatus.status !== 'succeeded' || !jobStatus.resultPath) {
+  if (jobStatus.status !== 'succeeded' || !jobStatus.resultReady) {
     return NextResponse.json(
       { error: { message: 'Result is not ready for download.' } },
       { status: 409 }
     );
   }
 
-  const exists = await fileExists(jobStatus.resultPath);
-  if (!exists) {
+  const resultBuffer = await getJobFile(jobId, 'results.xlsx');
+  if (!resultBuffer) {
     return NextResponse.json({ error: { message: 'Result file does not exist.' } }, { status: 404 });
   }
 
-  if (!isPathWithinJobRoot(jobId, jobStatus.resultPath)) {
-    return NextResponse.json({ error: { message: 'Invalid result path.' } }, { status: 500 });
-  }
-
-  const fileStream = createReadStream(jobStatus.resultPath);
-
-  return new NextResponse(Readable.toWeb(fileStream) as ReadableStream, {
+  return new NextResponse(new Uint8Array(resultBuffer), {
     headers: {
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'Content-Disposition': `attachment; filename="resume-judge-${jobId}.xlsx"`,

@@ -1,10 +1,11 @@
+import { promises as fs } from 'fs';
 import { Worker } from 'bullmq';
 import path from 'path';
 
 import { JOB_QUEUE_NAME } from '@shared/constants';
 import type { CreateJobPayload, JobProgress } from '@shared/types';
 
-import { getRedisConnection, setJobStatus } from './queue';
+import { getJobFile, getRedisConnection, setJobStatus, storeJobFile } from './queue';
 import { parseRubricXlsx } from '@scoring/rubric/parseRubricXlsx';
 import { unzipResumes } from '@scoring/resumes/unzipResumes';
 import { extractTextFromResumeFiles } from '@scoring/resumes/extractText';
@@ -44,6 +45,18 @@ export async function processJob(payload: CreateJobPayload): Promise<void> {
   });
 
   const dirs = await ensureJobDirectories(jobId);
+
+  // Pull uploaded files from Redis into local temp for processing
+  const resumesZipBuffer = await getJobFile(jobId, 'resumes.zip');
+  if (!resumesZipBuffer) throw new Error('Resume ZIP not found in storage.');
+  const rubricXlsxBuffer = await getJobFile(jobId, 'rubric.xlsx');
+  if (!rubricXlsxBuffer) throw new Error('Rubric XLSX not found in storage.');
+
+  const resumesZipPath = path.join(dirs.uploadsDir, 'resumes.zip');
+  const rubricXlsxPath = path.join(dirs.uploadsDir, 'rubric.xlsx');
+  await fs.writeFile(resumesZipPath, resumesZipBuffer);
+  await fs.writeFile(rubricXlsxPath, rubricXlsxBuffer);
+
   const resumesExtractDir = path.join(dirs.extractedDir, 'resumes');
 
   await setProgress(jobId, {
@@ -52,12 +65,12 @@ export async function processJob(payload: CreateJobPayload): Promise<void> {
     message: 'Unzipping resumes'
   });
 
-  const extractedFiles = await unzipResumes(payload.resumesZipPath, resumesExtractDir);
+  const extractedFiles = await unzipResumes(resumesZipPath, resumesExtractDir);
   if (!extractedFiles.length) {
     throw new Error('No files found in resumes ZIP.');
   }
 
-  const rubric = await parseRubricXlsx(payload.rubricXlsxPath);
+  const rubric = await parseRubricXlsx(rubricXlsxPath);
 
   const extractionResult = await extractTextFromResumeFiles(
     extractedFiles,
@@ -120,6 +133,10 @@ export async function processJob(payload: CreateJobPayload): Promise<void> {
     message: 'Finalizing result'
   });
 
+  // Store result XLSX in Redis so the web service can serve it
+  const resultBuffer = await fs.readFile(dirs.outputPath);
+  await storeJobFile(jobId, 'results.xlsx', resultBuffer);
+
   await setJobStatus({
     jobId,
     status: 'succeeded',
@@ -128,7 +145,7 @@ export async function processJob(payload: CreateJobPayload): Promise<void> {
       pct: 1,
       message: 'Completed'
     },
-    resultPath: dirs.outputPath,
+    resultReady: true,
     error: null
   });
 }

@@ -1,5 +1,4 @@
 import { randomUUID } from 'crypto';
-import path from 'path';
 
 import { NextResponse } from 'next/server';
 
@@ -15,8 +14,7 @@ import { apiKeysSchema, judgesSchema, notesSchema } from '@shared/schemas';
 import { generateJobAccessToken, getRequestIp, hashJobAccessToken, isRateLimited } from '@shared/security';
 import type { CreateJobPayload } from '@shared/types';
 
-import { getQueue, getRedisConnection, initJobStatus } from '@queue/queue';
-import { ensureJobDirectories, saveFileFromFormData } from '@storage/localTempStorage';
+import { getQueue, getRedisConnection, initJobStatus, storeJobFile } from '@queue/queue';
 
 export const runtime = 'nodejs';
 
@@ -140,19 +138,16 @@ export async function POST(request: Request) {
 
     const jobId = randomUUID();
     const accessToken = generateJobAccessToken();
-    const dirs = await ensureJobDirectories(jobId);
-    const resumesZipPath = path.join(dirs.uploadsDir, 'resumes.zip');
-    const rubricXlsxPath = path.join(dirs.uploadsDir, 'rubric.xlsx');
 
-    await saveFileFromFormData(resumesZip, resumesZipPath);
-    await saveFileFromFormData(rubricXlsx, rubricXlsxPath);
+    const resumesBuffer = Buffer.from(await resumesZip.arrayBuffer());
+    const rubricBuffer = Buffer.from(await rubricXlsx.arrayBuffer());
+    await storeJobFile(jobId, 'resumes.zip', resumesBuffer);
+    await storeJobFile(jobId, 'rubric.xlsx', rubricBuffer);
 
     await initJobStatus(jobId, hashJobAccessToken(accessToken));
 
     const payload: CreateJobPayload = {
       jobId,
-      resumesZipPath,
-      rubricXlsxPath,
       notes: sanitizedNotes,
       judges,
       apiKeys: resolvedApiKeys

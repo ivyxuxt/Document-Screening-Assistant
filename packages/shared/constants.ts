@@ -9,6 +9,7 @@ export type ProviderEnvKeyName = (typeof PROVIDER_ENV_KEY)[Provider];
 
 export const JOB_QUEUE_NAME = 'resume-judge-jobs';
 export const JOB_REDIS_KEY_PREFIX = 'resume-judge:job:';
+export const JOB_FILES_REDIS_KEY_PREFIX = 'resume-judge:files:';
 export const RATE_LIMIT_REDIS_KEY_PREFIX = 'resume-judge:ratelimit:';
 export const JOB_STATUS_TTL_SECONDS = 60 * 60 * 24;
 

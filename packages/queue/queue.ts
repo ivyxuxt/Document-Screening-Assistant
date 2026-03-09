@@ -1,7 +1,7 @@
 import { Queue } from 'bullmq';
 import IORedis from 'ioredis';
 
-import { JOB_QUEUE_NAME, JOB_REDIS_KEY_PREFIX, JOB_STATUS_TTL_SECONDS } from '@shared/constants';
+import { JOB_FILES_REDIS_KEY_PREFIX, JOB_QUEUE_NAME, JOB_REDIS_KEY_PREFIX, JOB_STATUS_TTL_SECONDS } from '@shared/constants';
 import { hashJobAccessToken, safeEqualTokenHash } from '@shared/security';
 import type {
   CreateJobPayload,
@@ -81,7 +81,7 @@ export async function initJobStatus(jobId: string, accessTokenHash: string): Pro
     progress_phase: progress.phase,
     progress_pct: String(progress.pct),
     progress_message: progress.message,
-    result_path: '',
+    result_ready: '0',
     error_message: '',
     error_stack: '',
     created_at: nowIso(),
@@ -94,7 +94,7 @@ export async function setJobStatus(args: {
   jobId: string;
   status?: JobStatus;
   progress?: JobProgress;
-  resultPath?: string;
+  resultReady?: boolean;
   error?: JobError | null;
 }): Promise<void> {
   const redis = getRedisConnection();
@@ -112,8 +112,8 @@ export async function setJobStatus(args: {
     updates.progress_message = args.progress.message;
   }
 
-  if (typeof args.resultPath === 'string') {
-    updates.result_path = args.resultPath;
+  if (args.resultReady) {
+    updates.result_ready = '1';
   }
 
   if (args.error === null) {
@@ -141,7 +141,7 @@ export async function hasJobAccess(jobId: string, accessToken: string): Promise<
   return safeEqualTokenHash(storedHash, hashJobAccessToken(accessToken));
 }
 
-export async function getJobStatus(jobId: string): Promise<(JobStatusResponse & { resultPath?: string }) | null> {
+export async function getJobStatus(jobId: string): Promise<(JobStatusResponse & { resultReady?: boolean }) | null> {
   const redis = getRedisConnection();
   const raw = await redis.hgetall(jobKey(jobId));
 
@@ -150,7 +150,7 @@ export async function getJobStatus(jobId: string): Promise<(JobStatusResponse & 
   }
 
   const pct = Number(raw.progress_pct ?? 0);
-  const resultPath = raw.result_path || undefined;
+  const resultReady = raw.result_ready === '1';
 
   return {
     jobId,
@@ -160,12 +160,32 @@ export async function getJobStatus(jobId: string): Promise<(JobStatusResponse & 
       pct: normalizePct(pct),
       message: raw.progress_message ?? ''
     },
-    result: resultPath ? { downloadUrl: `/api/jobs/${jobId}/download` } : null,
+    result: resultReady ? { downloadUrl: `/api/jobs/${jobId}/download` } : null,
     error: raw.error_message
       ? {
           message: raw.error_message
         }
       : null,
-    resultPath
+    resultReady
   };
+}
+
+// ---------------------------------------------------------------------------
+// Job file storage (Redis-backed, shared between web and worker containers)
+// ---------------------------------------------------------------------------
+
+function fileKey(jobId: string, filename: string): string {
+  return `${JOB_FILES_REDIS_KEY_PREFIX}${jobId}:${filename}`;
+}
+
+export async function storeJobFile(jobId: string, filename: string, data: Buffer): Promise<void> {
+  const redis = getRedisConnection();
+  const key = fileKey(jobId, filename);
+  await redis.set(key, data, 'EX', JOB_STATUS_TTL_SECONDS);
+}
+
+export async function getJobFile(jobId: string, filename: string): Promise<Buffer | null> {
+  const redis = getRedisConnection();
+  const key = fileKey(jobId, filename);
+  return redis.getBuffer(key);
 }

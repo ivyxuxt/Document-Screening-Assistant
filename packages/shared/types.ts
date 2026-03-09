@@ -85,8 +85,6 @@ export interface JobStatusResponse {
 
 export interface CreateJobPayload {
   jobId: string;
-  resumesZipPath: string;
-  rubricXlsxPath: string;
   notes?: string;
   judges: JudgeSpec[];
   apiKeys: Partial<Record<ProviderEnvKeyName, string>>;
