@@ -8,6 +8,7 @@ import JudgeSelector, { type JudgeEntry } from './components/JudgeSelector';
 import ApiKeyModal from './components/ApiKeyModal';
 import ProgressPanel from './components/ProgressPanel';
 import ResultDownload from './components/ResultDownload';
+import RubricFormatInfo from './components/RubricFormatInfo';
 import { submitJob } from './lib/apiClient';
 import { Button } from './components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from './components/ui/card';
@@ -124,7 +125,10 @@ export default function Home() {
               />
             </div>
             <div className="space-y-2">
-              <Label>Rubric (XLSX)</Label>
+              <Label className="inline-flex items-center gap-1.5">
+                Rubric (XLSX)
+                <RubricFormatInfo />
+              </Label>
               <UploadDropzone
                 accept=".xlsx"
                 label="Drag & drop an XLSX or click to browse"
