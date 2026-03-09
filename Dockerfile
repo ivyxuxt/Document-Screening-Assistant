@@ -1,16 +1,17 @@
 FROM node:20-bookworm-slim
 
-ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm ci --include=dev
 
 COPY . .
 
 RUN npm run build
+
+ENV NODE_ENV=production
 
 EXPOSE 3000
 

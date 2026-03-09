@@ -180,6 +180,38 @@ set +a
 npm run worker
 ```
 
+## Run Locally With Docker
+
+This repo includes `Dockerfile` and `docker-compose.yml` for local Docker use on `localhost`.
+
+1. Create `.env`.
+2. Keep provider keys in `.env` if you want the containers to have defaults.
+3. Start the stack:
+
+```bash
+docker compose up --build
+```
+
+This starts:
+- `web` on `http://localhost:3000`
+- `redis` on `localhost:6379`
+- `worker` in a second container
+
+Important:
+- Inside Docker Compose, `REDIS_URL` is set to `redis://redis:6379`.
+- On your host machine outside Docker, Redis remains reachable at `redis://localhost:6379`.
+- The web container binds to `0.0.0.0:3000`, so the app is available at `http://localhost:3000`.
+- The Docker image installs build-time dev dependencies because Next.js needs them during `npm run build`.
+
+Useful commands:
+
+```bash
+docker compose up --build -d
+docker compose logs -f web
+docker compose logs -f worker
+docker compose down
+```
+
 Alternative one-liner:
 
 ```bash
@@ -321,6 +353,7 @@ Both services must share the same Redis instance and the same `REDIS_URL`.
 ### What Is Already Configured In This Repo
 
 - `Dockerfile` builds a production image for Railway
+- `docker-compose.yml` runs `web`, `worker`, and `redis` locally on Docker
 - `.dockerignore` keeps the Docker build context clean
 - `npm run start:web` starts the Next.js server
 - `npm run start:worker` starts the BullMQ worker
