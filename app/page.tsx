@@ -123,6 +123,10 @@ export default function Home() {
                 onChange={setResumesZip}
                 disabled={disabled}
               />
+              <p className="text-xs rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-amber-900">
+                Warning: Resume files inside the ZIP must be <code>.pdf</code> or <code>.txt</code>. Other file
+                types are ignored.
+              </p>
             </div>
             <div className="space-y-2">
               <Label className="inline-flex items-center gap-1.5">
